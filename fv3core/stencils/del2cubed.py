@@ -38,32 +38,47 @@ def update_q(
 # ------------------------------------------------------------------------
 def corner_fill(q: FloatField):
     from __externals__ import i_end, i_start, j_end, j_start
+
     # Fills the same scalar value into three locations in q for each corner
     with computation(PARALLEL), interval(...):
+        cornervalue_sw = (q[0, 0, 0] + q[-1, 0, 0] + q[0, -1, 0]) * (1.0 / 3.0)
+        cornervalue_se = (q[0, 0, 0] + q[1, 0, 0] + q[0, -1, 0]) * (1.0 / 3.0)
+        cornervalue_ne = (q[0, 0, 0] + q[1, 0, 0] + q[0, 1, 0]) * (1.0 / 3.0)
+        cornervalue_nw = (q[0, 0, 0] + q[-1, 0, 0] + q[0, 1, 0]) * (1.0 / 3.0)
+        # TODO: AS we are currently lying about corner extens we use them like this to ensure the temporary is sized correctly
+        unused_var = (
+            cornervalue_sw[1, 1, 0]
+            + cornervalue_se[-1, 1, 0]
+            + cornervalue_ne[-1, -1, 0]
+            + cornervalue_nw[1, -1, 0]
+        )
         with horizontal(region[i_start, j_start]):
-            q = (q[0, 0, 0] + q[-1, 0, 0] + q[0, -1, 0]) * (1.0 / 3.0)
+            q = cornervalue_sw[0, 0, 0]
         with horizontal(region[i_start - 1, j_start]):
-            q = (q[1, 0, 0] + q[0, 0, 0] + q[1, -1, 0]) * (1.0 / 3.0)
+            q = cornervalue_sw[1, 0, 0]
         with horizontal(region[i_start, j_start - 1]):
-            q = (q[0, 1, 0] + q[-1, 1, 0] + q[0, 0, 0]) * (1.0 / 3.0)
+            q = cornervalue_sw[0, 1, 0]
+
         with horizontal(region[i_end, j_start]):
-            q = (q[0, 0, 0] + q[1, 0, 0] + q[0, -1, 0]) * (1.0 / 3.0)
+            q = cornervalue_se[0, 0, 0]
         with horizontal(region[i_end + 1, j_start]):
-            q = (q[-1, 0, 0] + q[0, 0, 0] + q[-1, -1, 0]) * (1.0 / 3.0)
+            q = cornervalue_se[-1, 0, 0]
         with horizontal(region[i_end, j_start - 1]):
-            q = (q[0, 1, 0] + q[1, 1, 0] + q[0, 0, 0]) * (1.0 / 3.0)
+            q = cornervalue_se[0, 1, 0]
+
         with horizontal(region[i_end, j_end]):
-            q = (q[0, 0, 0] + q[1, 0, 0] + q[0, 1, 0]) * (1.0 / 3.0)
+            q = cornervalue_ne[0, 0, 0]
         with horizontal(region[i_end + 1, j_end]):
-            q = (q[-1, 0, 0] + q[0, 0, 0] + q[-1, 1, 0]) * (1.0 / 3.0)
+            q = cornervalue_ne[-1, 0, 0]
         with horizontal(region[i_end, j_end + 1]):
-            q = (q[0, -1, 0] + q[1, -1, 0] + q[0, 0, 0]) * (1.0 / 3.0)
+            q = cornervalue_ne[0, -1, 0]
+
         with horizontal(region[i_start, j_end]):
-            q = (q[0, 0, 0] + q[-1, 0, 0] + q[0, 1, 0]) * (1.0 / 3.0)
+            q = cornervalue_nw
         with horizontal(region[i_start - 1, j_end]):
-            q = (q[1, 0, 0] + q[0, 0, 0] + q[1, 1, 0]) * (1.0 / 3.0)
+            q = cornervalue_nw[1, 0, 0]
         with horizontal(region[i_start, j_end + 1]):
-            q = (q[0, -1, 0] + q[-1, -1, 0] + q[0, 0, 0]) * (1.0 / 3.0)
+            q = cornervalue_nw[0, -1, 0]
 
 
 class HyperdiffusionDamping:
