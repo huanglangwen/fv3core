@@ -36,22 +36,18 @@ def update_q(
 #
 # Stencil that copies/fills in the appropriate corner values for qdel
 # ------------------------------------------------------------------------
-def corner_fill(q: FloatField):
+def corner_fill(
+    cornervalue_sw: FloatField,
+    cornervalue_se: FloatField,
+    cornervalue_ne: FloatField,
+    cornervalue_nw: FloatField,
+    q: FloatField,
+):
     from __externals__ import i_end, i_start, j_end, j_start
 
     # Fills the same scalar value into three locations in q for each corner
     with computation(PARALLEL), interval(...):
-        cornervalue_sw = (q[0, 0, 0] + q[-1, 0, 0] + q[0, -1, 0]) * (1.0 / 3.0)
-        cornervalue_se = (q[0, 0, 0] + q[1, 0, 0] + q[0, -1, 0]) * (1.0 / 3.0)
-        cornervalue_ne = (q[0, 0, 0] + q[1, 0, 0] + q[0, 1, 0]) * (1.0 / 3.0)
-        cornervalue_nw = (q[0, 0, 0] + q[-1, 0, 0] + q[0, 1, 0]) * (1.0 / 3.0)
-        # TODO: AS we are currently lying about corner extens we use them like this to ensure the temporary is sized correctly
-        unused_var = (
-            cornervalue_sw[1, 1, 0]
-            + cornervalue_se[-1, 1, 0]
-            + cornervalue_ne[-1, -1, 0]
-            + cornervalue_nw[1, -1, 0]
-        )
+
         with horizontal(region[i_start, j_start]):
             q = cornervalue_sw[0, 0, 0]
         with horizontal(region[i_start - 1, j_start]):
@@ -81,6 +77,71 @@ def corner_fill(q: FloatField):
             q = cornervalue_nw[0, -1, 0]
 
 
+def precompute_corner_values(
+    q: FloatField,
+    cornervalue_sw: FloatField,
+    cornervalue_se: FloatField,
+    cornervalue_ne: FloatField,
+    cornervalue_nw: FloatField,
+):
+    with computation(PARALLEL), interval(...):
+        cornervalue_sw = (q[0, 0, 0] + q[-1, 0, 0] + q[0, -1, 0]) * (1.0 / 3.0)
+        cornervalue_se = (q[0, 0, 0] + q[1, 0, 0] + q[0, -1, 0]) * (1.0 / 3.0)
+        cornervalue_ne = (q[0, 0, 0] + q[1, 0, 0] + q[0, 1, 0]) * (1.0 / 3.0)
+        cornervalue_nw = (q[0, 0, 0] + q[-1, 0, 0] + q[0, 1, 0]) * (1.0 / 3.0)
+
+
+class CornerFill:
+    def __init__(self, grid):
+        self.grid = grid
+        origin = self.grid.full_origin()
+        domain = self.grid.domain_shape_full()
+        ax_offsets = axis_offsets(spec.grid, origin, domain)
+        # These storages could potentially be 2d if we loop in the
+        # k-dimension sequentially after solving the regions dependency problem
+        self._cornervalue_sw = utils.make_storage_from_shape(
+            self.grid.domain_shape_full(add=(1, 1, 1)), origin=origin
+        )
+        self._cornervalue_se = utils.make_storage_from_shape(
+            self.grid.domain_shape_full(add=(1, 1, 1)), origin=origin
+        )
+        self._cornervalue_ne = utils.make_storage_from_shape(
+            self.grid.domain_shape_full(add=(1, 1, 1)), origin=origin
+        )
+        self._cornervalue_nw = utils.make_storage_from_shape(
+            self.grid.domain_shape_full(add=(1, 1, 1)), origin=origin
+        )
+        self._precompute_corner_values = FrozenStencil(
+            func=precompute_corner_values,
+            origin=self.grid.compute_origin(),
+            domain=self.grid.domain_shape_compute(add=(1, 1, 0)),
+        )
+        self._corner_fill = FrozenStencil(
+            func=corner_fill,
+            externals={
+                **ax_offsets,
+            },
+            origin=origin,
+            domain=domain,
+        )
+
+    def __call__(self, qdel: FloatField):
+        self._precompute_corner_values(
+            qdel,
+            self._cornervalue_sw,
+            self._cornervalue_se,
+            self._cornervalue_ne,
+            self._cornervalue_nw,
+        )
+        self._corner_fill(
+            self._cornervalue_sw,
+            self._cornervalue_se,
+            self._cornervalue_ne,
+            self._cornervalue_nw,
+            qdel,
+        )
+
+
 class HyperdiffusionDamping:
     """
     Fortran name is del2_cubed
@@ -91,7 +152,7 @@ class HyperdiffusionDamping:
         Args:
             grid: fv3core grid object
         """
-        self.grid = spec.grid
+        self.grid = grid
         origin = self.grid.full_origin()
         domain = self.grid.domain_shape_full()
         ax_offsets = axis_offsets(spec.grid, origin, domain)
@@ -101,15 +162,8 @@ class HyperdiffusionDamping:
         self._fy = utils.make_storage_from_shape(
             self.grid.domain_shape_full(add=(1, 1, 1)), origin=origin
         )
+        self._corner_fill = CornerFill(self.grid)
 
-        self._corner_fill = FrozenStencil(
-            func=corner_fill,
-            externals={
-                **ax_offsets,
-            },
-            origin=origin,
-            domain=domain,
-        )
         self._ntimes = min(3, nmax)
         origins = []
         domains_x = []
