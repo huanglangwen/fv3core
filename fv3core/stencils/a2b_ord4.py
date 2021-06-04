@@ -238,21 +238,33 @@ def lagrange_x_func(qy):
 def ppm_volume_mean_x(
     qin: FloatField,
     qx: FloatField,
+    qx0: FloatField,
     dxa: FloatFieldIJ,
 ):
     from __externals__ import i_end, i_start
 
-    # TODO(eddied): Deal with self-assigns here w/o temporaries for GTC...
     with computation(PARALLEL), interval(...):
         qx = b2 * (qin[-2, 0, 0] + qin[1, 0, 0]) + b1 * (qin[-1, 0, 0] + qin)
         with horizontal(region[i_start, :]):
             qx = qx_edge_west(qin, dxa)
+    with computation(PARALLEL), interval(...):
+        qx0 = qx
+    with computation(PARALLEL), interval(...):
         with horizontal(region[i_start + 1, :]):
-            qx = qx_edge_west2(qin, dxa, qx)
+            qx = (
+                3.0 * ((dxa / dxa[-1, 0]) * qin[-1, 0, 0] + qin)
+                - ((dxa / dxa[-1, 0]) * qx0[-1, 0, 0] + qx0[1, 0, 0])
+            ) / (2.0 + 2.0 * (dxa / dxa[-1, 0]))
         with horizontal(region[i_end + 1, :]):
             qx = qx_edge_east(qin, dxa)
+    with computation(PARALLEL), interval(...):
+        qx0 = qx
+    with computation(PARALLEL), interval(...):
         with horizontal(region[i_end, :]):
-            qx = qx_edge_east2(qin, dxa, qx)
+            qx = (
+                3.0 * (qin[-1, 0, 0] + (dxa[-1, 0] / dxa) * qin)
+                - ((dxa[-1, 0] / dxa) * qx0[1, 0, 0] + qx0[-1, 0, 0])
+            ) / (2.0 + 2.0 * (dxa[-1, 0] / dxa))
 
 
 def ppm_volume_mean_y(
@@ -321,18 +333,6 @@ def qx_edge_west(qin: FloatField, dxa: FloatFieldIJ):
         ((2.0 + g_in) * qin - qin[1, 0, 0]) / (1.0 + g_in)
         + ((2.0 + g_ou) * qin[-1, 0, 0] - qin[-2, 0, 0]) / (1.0 + g_ou)
     )
-    # This does not work, due to access of qx that is changing above
-
-    # qx[1, 0, 0] = (3.0 * (g_in * qin + qin[1, 0, 0])
-    #     - (g_in * qx + qx[2, 0, 0])) / (2.0 + 2.0 * g_in)
-
-
-@gtscript.function
-def qx_edge_west2(qin: FloatField, dxa: FloatFieldIJ, qx: FloatField):
-    g_in = dxa / dxa[-1, 0]
-    return (
-        3.0 * (g_in * qin[-1, 0, 0] + qin) - (g_in * qx[-1, 0, 0] + qx[1, 0, 0])
-    ) / (2.0 + 2.0 * g_in)
 
 
 @gtscript.function
@@ -343,14 +343,6 @@ def qx_edge_east(qin: FloatField, dxa: FloatFieldIJ):
         ((2.0 + g_in) * qin[-1, 0, 0] - qin[-2, 0, 0]) / (1.0 + g_in)
         + ((2.0 + g_ou) * qin - qin[1, 0, 0]) / (1.0 + g_ou)
     )
-
-
-@gtscript.function
-def qx_edge_east2(qin: FloatField, dxa: FloatFieldIJ, qx: FloatField):
-    g_in = dxa[-1, 0] / dxa
-    return (
-        3.0 * (qin[-1, 0, 0] + g_in * qin) - (g_in * qx[1, 0, 0] + qx[-1, 0, 0])
-    ) / (2.0 + 2.0 * g_in)
 
 
 @gtscript.function
@@ -408,9 +400,9 @@ class AGrid2BGridFourthOrder:
         self.grid = spec.grid
         self.replace = replace
         shape = self.grid.domain_shape_full(add=(1, 1, 1))
-        full_origin = (self.grid.isd, self.grid.jsd, kstart)
 
         self._tmp_qx = utils.make_storage_from_shape(shape)
+        self._tmp_qx0 = utils.make_storage_from_shape(shape)
         self._tmp_qy = utils.make_storage_from_shape(shape)
         self._tmp_qxx = utils.make_storage_from_shape(shape)
         self._tmp_qyy = utils.make_storage_from_shape(shape)
@@ -553,6 +545,7 @@ class AGrid2BGridFourthOrder:
         self._ppm_volume_mean_x_stencil(
             qin,
             self._tmp_qx,
+            self._tmp_qx0,
             self.grid.dxa,
         )
         self._ppm_volume_mean_y_stencil(
