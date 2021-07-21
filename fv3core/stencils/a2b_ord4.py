@@ -504,11 +504,11 @@ class AGrid2BGridFourthOrder:
         shape = self.grid.domain_shape_full(add=(1, 1, 1))
         full_origin = (self.grid.isd, self.grid.jsd, kstart)
 
-        self._tmp_q = utils.make_storage_from_shape(shape)
-        self._tmp_qx = utils.make_storage_from_shape(shape)
-        self._tmp_qy = utils.make_storage_from_shape(shape)
-        self._tmp_qxx = utils.make_storage_from_shape(shape)
-        self._tmp_qyy = utils.make_storage_from_shape(shape)
+        self._tmp_q = utils.make_storage_from_shape(shape, is_temp=True)
+        self._tmp_qx = utils.make_storage_from_shape(shape, is_temp=True)
+        self._tmp_qy = utils.make_storage_from_shape(shape, is_temp=True)
+        self._tmp_qxx = utils.make_storage_from_shape(shape, is_temp=True)
+        self._tmp_qyy = utils.make_storage_from_shape(shape, is_temp=True)
 
         if nk is None:
             nk = self.grid.npz - kstart

@@ -370,11 +370,11 @@ class CGridShallowWaterDynamics:
         shape = self.grid.domain_shape_full(add=(1, 1, 1))
         self.delpc = utils.make_storage_from_shape(shape)
         self.ptc = utils.make_storage_from_shape(shape)
-        self._tmp_uf = utils.make_storage_from_shape(shape)
-        self._tmp_vf = utils.make_storage_from_shape(shape)
-        self._tmp_fx = utils.make_storage_from_shape(shape)
-        self._tmp_fx1 = utils.make_storage_from_shape(shape)
-        self._tmp_fx2 = utils.make_storage_from_shape(shape)
+        self._tmp_uf = utils.make_storage_from_shape(shape, is_temp=True)
+        self._tmp_vf = utils.make_storage_from_shape(shape, is_temp=True)
+        self._tmp_fx = utils.make_storage_from_shape(shape, is_temp=True)
+        self._tmp_fx1 = utils.make_storage_from_shape(shape, is_temp=True)
+        self._tmp_fx2 = utils.make_storage_from_shape(shape, is_temp=True)
         corner_domain = (1, 1, self.grid.npz)
         self._initialize_delpc_ptc = FrozenStencil(
             func=initialize_delpc_ptc,

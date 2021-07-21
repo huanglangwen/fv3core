@@ -70,12 +70,14 @@ class FiniteVolumeTransport:
         self.grid = spec.grid
         shape = self.grid.domain_shape_full(add=(1, 1, 1))
         origin = self.grid.compute_origin()
-        self._tmp_q_i = utils.make_storage_from_shape(shape, origin)
-        self._tmp_q_j = utils.make_storage_from_shape(shape, origin)
-        self._tmp_fx2 = utils.make_storage_from_shape(shape, origin)
-        self._tmp_fy2 = utils.make_storage_from_shape(shape, origin)
+        self._tmp_q_i = utils.make_storage_from_shape(shape, origin, is_temp=True)
+        self._tmp_q_j = utils.make_storage_from_shape(shape, origin, is_temp=True)
+        self._tmp_fx2 = utils.make_storage_from_shape(shape, origin, is_temp=True)
+        self._tmp_fy2 = utils.make_storage_from_shape(shape, origin, is_temp=True)
         self._corner_tmp = utils.make_storage_from_shape(
-            self.grid.domain_shape_full(add=(1, 1, 1)), origin=self.grid.full_origin()
+            self.grid.domain_shape_full(add=(1, 1, 1)),
+            origin=self.grid.full_origin(),
+            is_temp=True,
         )
         """Temporary field to use for corner computation in both x and y direction"""
         self._nord = nord

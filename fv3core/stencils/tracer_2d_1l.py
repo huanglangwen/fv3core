@@ -110,11 +110,11 @@ class TracerAdvection:
         self._do_halo_exchange = global_config.get_do_halo_exchange()
         shape = self.grid.domain_shape_full(add=(1, 1, 1))
         origin = self.grid.compute_origin()
-        self._tmp_xfx = utils.make_storage_from_shape(shape, origin)
-        self._tmp_yfx = utils.make_storage_from_shape(shape, origin)
-        self._tmp_fx = utils.make_storage_from_shape(shape, origin)
-        self._tmp_fy = utils.make_storage_from_shape(shape, origin)
-        self._tmp_dp = utils.make_storage_from_shape(shape, origin)
+        self._tmp_xfx = utils.make_storage_from_shape(shape, origin, is_temp=True)
+        self._tmp_yfx = utils.make_storage_from_shape(shape, origin, is_temp=True)
+        self._tmp_fx = utils.make_storage_from_shape(shape, origin, is_temp=True)
+        self._tmp_fy = utils.make_storage_from_shape(shape, origin, is_temp=True)
+        self._tmp_dp = utils.make_storage_from_shape(shape, origin, is_temp=True)
         self._tmp_qn2 = self.grid.quantity_wrap(
             utils.make_storage_from_shape(shape, origin),
             units="kg/m^2",

@@ -122,12 +122,18 @@ class RiemannSolver3:
         riemorigin = grid.compute_origin()
         domain = grid.domain_shape_compute(add=(0, 0, 1))
         shape = grid.domain_shape_full(add=(1, 1, 1))
-        self._tmp_dm = utils.make_storage_from_shape(shape, riemorigin)
-        self._tmp_pe_init = utils.make_storage_from_shape(shape, riemorigin)
-        self._tmp_pm = utils.make_storage_from_shape(shape, riemorigin)
-        self._tmp_pem = utils.make_storage_from_shape(shape, riemorigin)
-        self._tmp_peln_run = utils.make_storage_from_shape(shape, riemorigin)
-        self._tmp_gm = utils.make_storage_from_shape(shape, riemorigin)
+        self._tmp_dm = utils.make_storage_from_shape(shape, riemorigin, is_temp=True)
+        self._tmp_pe_init = utils.make_storage_from_shape(
+            shape, riemorigin, is_temp=True
+        )
+        self._tmp_pm = utils.make_storage_from_shape(shape, riemorigin, is_temp=True)
+        self._tmp_pem = utils.make_storage_from_shape(
+            shape, riemorigin, is_temp=True
+        )
+        self._tmp_peln_run = utils.make_storage_from_shape(
+            shape, riemorigin, is_temp=True
+        )
+        self._tmp_gm = utils.make_storage_from_shape(shape, riemorigin, is_temp=True)
         self._precompute_stencil = FrozenStencil(
             precompute,
             origin=riemorigin,

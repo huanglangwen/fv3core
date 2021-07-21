@@ -1,5 +1,6 @@
 import logging
 from functools import wraps
+import gc
 from typing import Any, Callable, Dict, Hashable, List, Optional, Tuple, Union
 
 import gt4py as gt
@@ -18,7 +19,7 @@ try:
 except ImportError:
     cp = None
 
-logger = logging.getLogger("fv3ser")
+logger = logging.getLogger("fv3core")
 
 # If True, automatically transfers memory between CPU and GPU (see gt4py.storage)
 managed_memory = True
@@ -40,15 +41,14 @@ tracer_variables = [
     "qcld",
 ]
 
-# Logger instance
-logger = logging.getLogger("fv3ser")
-
 # 1 indexing to 0 and halos: -2, -1, 0 --> 0, 1,2
 if MPI is not None and MPI.COMM_WORLD.Get_size() > 1:
     dir_name = os.environ.get("GT_CACHE_DIR_NAME", ".gt_cache")
     gt.config.cache_settings["dir_name"] = "{}_{:0>6d}".format(
         dir_name, MPI.COMM_WORLD.Get_rank()
     )
+
+temporary_storages = {}
 
 
 # TODO remove when using quantities throughout model
@@ -234,7 +234,6 @@ def _make_storage_data_3d(
     ] = asarray(data, type(buffer))
     return buffer
 
-
 def make_storage_from_shape_uncached(
     shape: Tuple[int, int, int],
     origin: Tuple[int, int, int] = origin,
@@ -242,6 +241,7 @@ def make_storage_from_shape_uncached(
     dtype: DTypes = np.float64,
     init: bool = False,
     mask: Optional[Tuple[bool, bool, bool]] = None,
+    is_temp: bool = False,
 ) -> Field:
     """Create a new gt4py storage of a given shape. Do not memoize outputs.
 
@@ -278,11 +278,12 @@ def make_storage_from_shape_uncached(
         mask=mask,
         managed_memory=managed_memory,
     )
+    if is_temp:
+        temporary_storages[id(storage)] = storage
     return storage
 
 
 storage_shape_outputs = {}
-
 
 def make_storage_from_shape(
     shape: Tuple[int, ...],
@@ -292,6 +293,7 @@ def make_storage_from_shape(
     init: bool = False,
     mask: Optional[Tuple[bool, bool, bool]] = None,
     cache_key: Optional[Hashable] = None,
+    is_temp: bool = False,
 ) -> Field:
     """Create a new gt4py storage of a given shape. Outputs are memoized
        using a provided cache_key
@@ -320,7 +322,7 @@ def make_storage_from_shape(
     # the line.
     if cache_key is None:
         return make_storage_from_shape_uncached(
-            shape, origin, dtype=dtype, init=init, mask=mask
+            shape, origin, dtype=dtype, init=init, mask=mask, is_temp=is_temp
         )
     full_key = (shape, origin, cache_key, dtype, init, mask)
     if full_key not in storage_shape_outputs:
@@ -330,6 +332,8 @@ def make_storage_from_shape(
     return_value = storage_shape_outputs[full_key]
     if init:
         return_value[:] = 0.0
+    if is_temp:
+        temporary_storages[id(return_value)] = return_value
     return return_value
 
 
@@ -346,6 +350,14 @@ def cached_stencil_class(class_init):
         return compiled_stencil_classes[key]
 
     return memoized
+
+
+def clear_temporaries():
+    for storage_id in temporary_storages.keys():
+        storage = temporary_storages[storage_id]
+        del storage
+        temporary_storages[storage_id] = None
+    gc.collect()
 
 
 def make_storage_dict(
@@ -574,3 +586,11 @@ def deserialize(file: str):
     if not file.endswith(".npz"):
         file += ".npz"
     return np.load(file)
+
+
+def assert_allclose(comp_data, ref_data):
+    for name in comp_data.keys():
+        gtc_array = np.asarray(comp_data[name])
+        assert name in ref_data
+        np_array = np.asarray(ref_data[name])
+        assert np.allclose(gtc_array, np_array)

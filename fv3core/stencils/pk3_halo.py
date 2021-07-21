@@ -29,7 +29,9 @@ class PK3Halo:
         origin = grid.full_origin()
         domain = grid.domain_shape_full(add=(0, 0, 1))
 
-        self._pe_tmp = utils.make_storage_from_shape(shape_2D, grid.full_origin())
+        self._pe_tmp = utils.make_storage_from_shape(
+            shape_2D, grid.full_origin(), is_temp=True
+        )
         edge_domain_x = (2, grid.njc, grid.npz + 1)
         self._edge_pe_update_west = FrozenStencil(
             edge_pe_update,

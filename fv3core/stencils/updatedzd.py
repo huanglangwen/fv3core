@@ -246,7 +246,7 @@ class UpdateHeightOnDGrid:
             largest_possible_shape, self.grid.full_origin()
         )
         self._zh_tmp = utils.make_storage_from_shape(
-            largest_possible_shape, self.grid.full_origin()
+            largest_possible_shape, self.grid.full_origin(), is_temp=True
         )
 
     def _initialize_interpolation_constants(self):

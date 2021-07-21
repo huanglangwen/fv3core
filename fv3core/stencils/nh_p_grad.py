@@ -100,10 +100,10 @@ class NonHydrostaticPressureGradient:
         self.rdy = grid.rdy
 
         self._tmp_wk = utils.make_storage_from_shape(
-            grid.domain_shape_full(add=(0, 0, 1)), origin=self.orig
+            grid.domain_shape_full(add=(0, 0, 1)), origin=self.orig, is_temp=True
         )  # pk3.shape
         self._tmp_wk1 = utils.make_storage_from_shape(
-            grid.domain_shape_full(add=(0, 0, 1)), origin=self.orig
+            grid.domain_shape_full(add=(0, 0, 1)), origin=self.orig, is_temp=True
         )  # pp.shape
 
         self._set_k0_and_calc_wk_stencil = FrozenStencil(

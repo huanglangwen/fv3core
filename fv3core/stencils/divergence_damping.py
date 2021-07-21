@@ -400,7 +400,9 @@ class DivergenceDamping:
             domain=(self.grid.nid + 1, self.grid.njd + 1, nk),
         )
         self._corner_tmp = utils.make_storage_from_shape(
-            self.grid.domain_shape_full(add=(1, 1, 1)), origin=self.grid.full_origin()
+            self.grid.domain_shape_full(add=(1, 1, 1)),
+            origin=self.grid.full_origin(),
+            is_temp=True,
         )
         fill_origin = (self.grid.isd, self.grid.jsd, kstart)
         fill_domain = (self.grid.nid + 1, self.grid.njd + 1, nk + 1)

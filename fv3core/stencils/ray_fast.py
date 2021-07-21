@@ -138,9 +138,9 @@ class RayleighDamping:
         domain = (grid.nic + 1, grid.njc + 1, grid.npz)
 
         shape = grid.domain_shape_full(add=(1, 1, 1))
-        self._tmp_dm = utils.make_storage_from_shape(shape)
+        self._tmp_dm = utils.make_storage_from_shape(shape, is_temp=True)
 
-        self._tmp_rf = utils.make_storage_from_shape(shape)
+        self._tmp_rf = utils.make_storage_from_shape(shape, is_temp=True)
         self._dm_compute = FrozenStencil(
             dm_compute,
             origin=origin,

@@ -50,9 +50,14 @@ def lagrangian_contributions(
                 - q4_4[0, 0, lev] * 1.0 / 3.0 * (1.0 + pl * (1.0 + pl))
             )
             lev = lev + 1
-            while pe1[0, 0, lev + 1] < pe2[0, 0, 1]:
+            # state = True
+            # for k in K[index(K):]:
+            #     if state and pe1[0, 0, lev + 1] < pe2[0, 0, 1]:
+            if pe1[0, 0, lev + 1] < pe2[0, 0, 1]:
                 qsum += dp1[0, 0, lev] * q4_1[0, 0, lev]
                 lev = lev + 1
+            # else:
+            #     state = False
             dp = pe2[0, 0, 1] - pe1[0, 0, lev]
             esl = dp / dp1[0, 0, lev]
             qsum += dp * (
@@ -84,7 +89,9 @@ class MapSingle:
         self._q4_2 = utils.make_storage_from_shape(shape, origin=origin)
         self._q4_3 = utils.make_storage_from_shape(shape, origin=origin)
         self._q4_4 = utils.make_storage_from_shape(shape, origin=origin)
-        self._tmp_qs = utils.make_storage_from_shape(shape[0:2], origin=(0, 0))
+        self._tmp_qs = utils.make_storage_from_shape(
+            shape[0:2], origin=(0, 0), is_temp=True
+        )
         self._lev = utils.make_storage_from_shape(
             shape[:-1],
             origin=origin[:-1],
