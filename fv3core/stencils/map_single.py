@@ -29,11 +29,9 @@ def lagrangian_contributions(
     lev: IntFieldIJ,
 ):
     with computation(FORWARD), interval(...):
-        v_pe2 = pe2
-        v_pe1 = pe1[0, 0, lev]
-        pl = (v_pe2 - v_pe1) / dp1[0, 0, lev]
+        pl = (pe2 - pe1[0, 0, lev]) / dp1[0, 0, lev]
         if pe2[0, 0, 1] <= pe1[0, 0, lev + 1]:
-            pr = (pe2[0, 0, 1] - v_pe1) / dp1[0, 0, lev]
+            pr = (pe2[0, 0, 1] - pe1[0, 0, lev]) / dp1[0, 0, lev]
             q = (
                 q4_2[0, 0, lev]
                 + 0.5
@@ -49,15 +47,10 @@ def lagrangian_contributions(
                 * (1.0 + pl)
                 - q4_4[0, 0, lev] * 1.0 / 3.0 * (1.0 + pl * (1.0 + pl))
             )
-            lev = lev + 1
-            # state = True
-            # for k in K[index(K):]:
-            #     if state and pe1[0, 0, lev + 1] < pe2[0, 0, 1]:
-            if pe1[0, 0, lev + 1] < pe2[0, 0, 1]:
+            lev += 1
+            while pe1[0, 0, lev + 1] < pe2[0, 0, 1]:
                 qsum += dp1[0, 0, lev] * q4_1[0, 0, lev]
-                lev = lev + 1
-            # else:
-            #     state = False
+                lev += 1
             dp = pe2[0, 0, 1] - pe1[0, 0, lev]
             esl = dp / dp1[0, 0, lev]
             qsum += dp * (
@@ -71,7 +64,7 @@ def lagrangian_contributions(
                 )
             )
             q = qsum / (pe2[0, 0, 1] - pe2)
-        lev = lev - 1
+        lev -= 1
 
 
 class MapSingle:
