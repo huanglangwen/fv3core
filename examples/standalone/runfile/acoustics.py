@@ -9,7 +9,9 @@ import fv3core.testing
 import fv3core.utils.global_config as global_config
 import serialbox
 from fv3core.stencils.dyn_core import AcousticDynamics
-
+from gt4py.storage import from_array
+from time import time
+import cupy
 
 def set_up_namelist(data_directory: str) -> None:
     spec.set_namelist(data_directory + "/input.nml")
@@ -77,6 +79,10 @@ def driver(
     set_up_namelist(data_directory)
     serializer = initialize_serializer(data_directory)
     initialize_fv3core(backend, halo_update)
+    if backend == "gtc:cuda":
+        from gt4py.gtgraph import AsyncContext
+        async_context = AsyncContext(50, name="acoustics", graph_record=False, concurrent=True, blocking=False, region_analysis=True)
+        global_config.set_async_context(async_context)
     grid = read_grid(serializer)
     spec.set_grid(grid)
 
@@ -85,24 +91,35 @@ def driver(
     acoutstics_object = AcousticDynamics(
         None,
         spec.namelist,
-        input_data["ak"],
-        input_data["bk"],
-        input_data["pfull"],
-        input_data["phis"],
+        from_array(input_data["ak"], backend, (0,0,0), mask=(False, False, True)),
+        from_array(input_data["bk"], backend, (0,0,0), mask=(False, False, True)),
+        from_array(input_data["pfull"], backend, (0,0,0), mask=(False, False, True)),
+        from_array(input_data["phis"], backend, (0,0,0)),
     )
 
     state = get_state_from_input(grid, input_data)
-    state.__dict__.update(acoutstics_object._temporaries)
+    state["state"].__dict__.update(acoutstics_object._temporaries)
 
     # Testing dace infrastucture
-    output_field = acoutstics_object.dace_dummy(input_data["omga"])
-    output_field = acoutstics_object.dace_dummy(state["state"].omga)
-    print(output_field)
+    #output_field = acoutstics_object.dace_dummy(input_data["omga"])
+    #output_field = acoutstics_object.dace_dummy(state["state"].omga)
+    #print(output_field)
 
     # @Linus: make this call a dace program
-    for _ in range(int(time_steps)):
-        acoutstics_object(state["state"], insert_temporaries=False)
+    
+    acoutstics_object(state["state"], insert_temporaries=False)
+    async_context.wait()
+    t0 = time()
+    with cupy.cuda.profile():
+        for _ in range(int(time_steps)-1):
+            acoutstics_object(state["state"], insert_temporaries=False)
+        if backend == "gtc:cuda":
+            async_context.wait()
+            #async_context.graph_save()
+    t1 = time()
+    print(f"Elapsed time: {t1 - t0} s")
 
 
 if __name__ == "__main__":
     driver()
+
