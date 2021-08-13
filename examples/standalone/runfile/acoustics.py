@@ -12,6 +12,7 @@ from fv3core.stencils.dyn_core import AcousticDynamics
 from gt4py.storage import from_array
 from time import time
 import cupy
+import cProfile, pstats
 
 def set_up_namelist(data_directory: str) -> None:
     spec.set_namelist(data_directory + "/input.nml")
@@ -79,9 +80,11 @@ def driver(
     set_up_namelist(data_directory)
     serializer = initialize_serializer(data_directory)
     initialize_fv3core(backend, halo_update)
+    blocking = False
+    concurrent = False
     if backend == "gtc:cuda":
         from gt4py.gtgraph import AsyncContext
-        async_context = AsyncContext(50, name="acoustics", graph_record=False, concurrent=True, blocking=False, region_analysis=True)
+        async_context = AsyncContext(50, name="acoustics", graph_record=False, concurrent=concurrent, blocking=blocking, region_analysis=False, sleep_time=0.0001)
         global_config.set_async_context(async_context)
     grid = read_grid(serializer)
     spec.set_grid(grid)
@@ -109,6 +112,8 @@ def driver(
     
     acoutstics_object(state["state"], insert_temporaries=False)
     async_context.wait()
+    pr = cProfile.Profile()
+    pr.enable()
     t0 = time()
     with cupy.cuda.profile():
         for _ in range(int(time_steps)-1):
@@ -117,7 +122,10 @@ def driver(
             async_context.wait()
             #async_context.graph_save()
     t1 = time()
-    print(f"Elapsed time: {t1 - t0} s")
+    pr.disable()
+    print(f"Blocking: {blocking}, Concurrent: {concurrent}, Elapsed time: {t1 - t0} s")
+    stats = pstats.Stats(pr).sort_stats('tottime')
+    stats.print_stats(0.01)
 
 
 if __name__ == "__main__":
