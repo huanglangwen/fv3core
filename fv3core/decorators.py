@@ -161,7 +161,7 @@ class FrozenStencil:
             args_as_kwargs = dict(zip(self._argument_names, args))
             async_context = global_config.get_async_context()
             if async_context:
-                async_context.schedule(self.stencil_object, **args_as_kwargs, **kwargs, exec_info=None, validate_args=True, origin=self.origin, domain=self.domain)
+                async_context.schedule(self.stencil_object, **args_as_kwargs, **kwargs, exec_info=None, origin=self.origin, domain=self.domain)
             else:
                 self.stencil_object.run(
                     **args_as_kwargs, **kwargs, **self._stencil_run_kwargs, exec_info=None, async_launch=False, streams=0
