@@ -18,7 +18,14 @@ import fv3core.testing
 import fv3core.utils.global_config as global_config
 import fv3gfs.util as util
 import serialbox
-import timing
+from fv3core.stencils.dyn_core import AcousticDynamics
+from gt4py.storage import from_array
+from time import time
+import cupy
+import cProfile, pstats
+
+def set_up_namelist(data_directory: str) -> None:
+    spec.set_namelist(data_directory + "/input.nml")
 
 def parse_args() -> Namespace:
     usage = (
@@ -89,122 +96,73 @@ def read_input_data(grid, serializer):
         driver_object.grid.quantity_dict_update(
             input_data, name, dims=properties["dims"], units=properties["units"]
         )
-        
-    return input_data
+
+    statevars = SimpleNamespace(**input_data)
+    return {"state": statevars}
+
+
+@click.command()
+@click.argument("data_directory", required=True, nargs=1)
+@click.argument("time_steps", required=False, default="1")
+@click.argument("backend", required=False, default="gtc:gt:cpu_ifirst")
+@click.option("--halo_update/--no-halo_update", default=False)
+def driver(
+    data_directory: str,
+    time_steps: str,
+    backend: str,
+    halo_update: bool,
+):
+    set_up_namelist(data_directory)
+    serializer = initialize_serializer(data_directory)
+    initialize_fv3core(backend, halo_update)
+    blocking = False
+    concurrent = False
+    if backend == "gtc:cuda":
+        from gt4py.gtgraph import AsyncContext
+        async_context = AsyncContext(50, name="acoustics", graph_record=False, concurrent=concurrent, blocking=blocking, region_analysis=False, sleep_time=0.0001)
+        global_config.set_async_context(async_context)
+    grid = read_grid(serializer)
+    spec.set_grid(grid)
+
+    input_data = read_input_data(grid, serializer)
+
+    acoutstics_object = AcousticDynamics(
+        None,
+        spec.namelist,
+        from_array(input_data["ak"], backend, (0,0,0), mask=(False, False, True)),
+        from_array(input_data["bk"], backend, (0,0,0), mask=(False, False, True)),
+        from_array(input_data["pfull"], backend, (0,0,0), mask=(False, False, True)),
+        from_array(input_data["phis"], backend, (0,0,0)),
+    )
+
+    state = get_state_from_input(grid, input_data)
+    state["state"].__dict__.update(acoutstics_object._temporaries)
+
+    # Testing dace infrastucture
+    #output_field = acoutstics_object.dace_dummy(input_data["omga"])
+    #output_field = acoutstics_object.dace_dummy(state["state"].omga)
+    #print(output_field)
+
+    # @Linus: make this call a dace program
+    
+    acoutstics_object(state["state"], insert_temporaries=False)
+    async_context.wait()
+    pr = cProfile.Profile()
+    pr.enable()
+    t0 = time()
+    with cupy.cuda.profile():
+        for _ in range(int(time_steps)-1):
+            acoutstics_object(state["state"], insert_temporaries=False)
+        if backend == "gtc:cuda":
+            async_context.wait()
+            #async_context.graph_save()
+    t1 = time()
+    pr.disable()
+    print(f"Blocking: {blocking}, Concurrent: {concurrent}, Elapsed time: {t1 - t0} s")
+    stats = pstats.Stats(pr).sort_stats('tottime')
+    stats.print_stats(0.01)
 
 
 if __name__ == "__main__":
-    timer = util.Timer()
-    timer.start("total")
-    with timer.clock("initialization"):
-        args = parse_args()
-        comm = MPI.COMM_WORLD
-        rank = comm.Get_rank()
+    driver()
 
-        profiler = None
-        if args.profile:
-            import cProfile
-
-            profiler = cProfile.Profile()
-            profiler.disable()
-
-        fv3core.set_backend(args.backend)
-        fv3core.set_rebuild(False)
-        fv3core.set_validate_args(False)
-        global_config.set_do_halo_exchange(not args.disable_halo_exchange)
-
-        spec.set_namelist(args.data_dir + "/input.nml")
-
-        experiment_name = yaml.safe_load(
-            open(
-                args.data_dir + "/input.yml",
-                "r",
-            )
-        )["experiment_name"]
-
-        # set up of helper structures
-        serializer = serialbox.Serializer(
-            serialbox.OpenModeKind.Read,
-            args.data_dir,
-            "Generator_rank" + str(rank),
-        )
-        cube_comm = util.CubedSphereCommunicator(
-            comm,
-            util.CubedSpherePartitioner(util.TilePartitioner(spec.namelist.layout)),
-        )
-
-        # get grid from serialized data
-        grid = read_grid(serializer, rank)
-        spec.set_grid(grid)
-
-        # set up grid-dependent helper structures
-        layout = spec.namelist.layout
-        partitioner = util.CubedSpherePartitioner(util.TilePartitioner(layout))
-        communicator = util.CubedSphereCommunicator(comm, partitioner)
-
-        # create a state from serialized data
-        input_data = read_input_data(grid, serializer)
-        state = SimpleNamespace(**input_data)
-
-        acoustics = fv3core.AcousticDynamics(
-            communicator,
-            spec.namelist,
-            state.ak,
-            state.bk,
-            state.pfull,
-            state.phis
-        )
-        state.__dict__.update(acoustics._temporaries)
-
-        # warm-up timestep.
-        # We're intentionally not passing the timer here to exclude
-        # warmup/compilation from the internal timers
-        if rank == 0:
-            print("timestep 1")
-        acoustics(state,insert_temporaries=False)
-
-    if profiler is not None:
-        profiler.enable()
-
-    times_per_step = []
-    hits_per_step = []
-    # we set up a specific timer for each timestep
-    # that is cleared after so we get individual statistics
-    timestep_timer = util.Timer()
-    for i in range(args.time_step - 1):
-        # this loop is not required, but make performance numbers comparable with FVDynamics
-        for _ in range(spec.namelist.k_split):
-            with timestep_timer.clock("DynCore"):
-                if rank == 0:
-                    print(f"timestep {i+2}")
-                acoustics(state,insert_temporaries=False)
-        times_per_step.append(timestep_timer.times)
-        hits_per_step.append(timestep_timer.hits)
-        timestep_timer.reset()
-
-    if profiler is not None:
-        profiler.disable()
-
-    timer.stop("total")
-    times_per_step.append(timer.times)
-    hits_per_step.append(timer.hits)
-
-    # output profiling data
-    if profiler is not None:
-        profiler.dump_stats(f"fv3core_{experiment_name}_{args.backend}_{rank}.prof")
-
-    # Timings
-    if not args.disable_json_dump:
-        # Collect times and output statistics in json
-        comm.Barrier()
-        timing.collect_data_and_write_to_file(
-            args, comm, hits_per_step, times_per_step, experiment_name
-        )
-    else:
-        # Print a brief summary of timings
-        # Dev Note: we especially do _not_ gather timings here to have a
-        # no-MPI-communication codepath
-        print(f"Rank {rank} done. Total time: {timer.times['total']}.")
-
-    if rank == 0:
-        print("SUCCESS")

@@ -62,6 +62,12 @@ def set_device_sync(flag: bool):
 def get_device_sync() -> bool:
     return _DEVICE_SYNC
 
+def set_async_context(context):
+    global _ASYNC_CONTEXT
+    _ASYNC_CONTEXT = context
+
+def get_async_context():
+    return _ASYNC_CONTEXT
 
 def is_gpu_backend() -> bool:
     return get_backend().endswith("cuda") or get_backend().endswith("gpu")
@@ -132,3 +138,4 @@ _FORMAT_SOURCE = getenv_bool("FV3_STENCIL_FORMAT_SOURCE", "False")
 _DO_HALO_EXCHANGE = True
 _VALIDATE_ARGS = True
 _DEVICE_SYNC = False
+_ASYNC_CONTEXT = None
