@@ -132,11 +132,15 @@ def delnflux_combined(
             fx1 = -del6_v * (d2_2[-1, 0, 0] - d2_2)
             fy1 = -del6_u * (d2_2[0, -1, 0] - d2_2)
             d2 = (fx1 - fx1[1, 0, 0] + fy1 - fy1[0, 1, 0]) * rarea
-            fx = -del6_v * (d2[-1, 0, 0] - d2)
-            fy = -del6_u * (d2[0, -1, 0] - d2)
+            #fx = -del6_v * (d2[-1, 0, 0] - d2)
+            #fy = -del6_u * (d2[0, -1, 0] - d2)
         else:
             fx = fx1
             fy = fy1
+    with computation(PARALLEL), interval(...):
+        if nord > 0:
+            fx = -del6_v * (d2[-1, 0, 0] - d2)
+            fy = -del6_u * (d2[0, -1, 0] - d2)
 class DelnFlux:
     """
     Fortran name is deln_flux
