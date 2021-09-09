@@ -274,8 +274,8 @@ class DelnFluxNoSG:
        
         self._d2_stencil1 = FrozenStencil(
             delnflux_combined,
-            origin=self._grid.full_origin(add=(1, 1, 0)),
-            domain=self._grid.domain_shape_full(add=(-2, -2, self._nk - self._grid.npz))
+            origin=self._grid.full_origin(add=(3, 3, 0)),
+            domain=self._grid.domain_shape_full(add=(-4, -4, self._nk - self._grid.npz))
             
         )
 
