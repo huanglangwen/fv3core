@@ -81,11 +81,17 @@ def driver(
     set_up_namelist(data_directory)
     serializer = initialize_serializer(data_directory)
     initialize_fv3core(backend, halo_update)
-    blocking = True
-    concurrent = False
+    blocking = False
+    concurrent = True
+    usecython = True
     if backend == "gtc:cuda":
-        from gt4py.gtgraph import AsyncContext
-        async_context = AsyncContext(50, name="acoustics", graph_record=False, concurrent=concurrent, blocking=blocking, region_analysis=False, sleep_time=0.0001)
+        if usecython:
+            import pyximport; pyximport.install(inplace=True)
+            from gt4py.runtime.gtgraph_fast import AsyncContextFast as AsyncContext
+            async_context = AsyncContext(50, concurrent=concurrent, blocking=blocking, sleep_time=0.0001)
+        else:
+            from gt4py.gtgraph import AsyncContext
+            async_context = AsyncContext(50, name="acoustics", graph_record=False, concurrent=concurrent, blocking=blocking, region_analysis=False, sleep_time=0.0001)
         global_config.set_async_context(async_context)
     grid = read_grid(serializer)
     spec.set_grid(grid)
@@ -124,13 +130,13 @@ def driver(
             #async_context.graph_save()
     t1 = time()
     pr.disable()
-    print(f"Blocking: {blocking}, Concurrent: {concurrent}, Elapsed time: {t1 - t0} s")
+    print(f"Cython: {usecython}, Blocking: {blocking}, Concurrent: {concurrent}, Elapsed time: {t1 - t0} s")
     stats = pstats.Stats(pr).sort_stats('tottime')
-    stats.print_stats(0.01)
+    stats.print_stats(0.02)
 
 
 if __name__ == "__main__":
-    print(f"PID: {os.getpid()}")
-    print(f"Run `cuda-gdb -p {os.getpid}` to debug this process")
-    input("Wait for cuda-gdb")
+    #print(f"PID: {os.getpid()}")
+    #print(f"Run `cuda-gdb -p {os.getpid()}` to debug this process")
+    #input("Wait for cuda-gdb")
     driver()
